@@ -16,29 +16,50 @@
   let roleName = "";
   let roleDescription = "";
   let selectedModules = {};
-
   onMount(async () => {
     $loading = true;
     try {
       const modulos = await fetchModules();
       $modules = modulos;
-      modulos.forEach((modulo) => {
-        selectedModules[modulo.id] = false;
-      });
 
+      // Inicializar mapa de selectedModules según los módulos disponibles
+      const base = {};
+      modulos.forEach((m) => (base[m.id] = false));
+
+      // Si estamos en edición y hay un editingRole, marcar los permisos iniciales
       if (isEditing && editingRole) {
-        roleName = editingRole.name || "";
-        roleDescription = editingRole.description || "";
-        (editingRole.modules || []).forEach((modId) => {
-          selectedModules[modId] = true;
+        (editingRole.modules || []).forEach((mid) => {
+          if (base[mid] !== undefined) base[mid] = true;
         });
       }
+
+      selectedModules = base;
     } catch (err) {
       console.error("Error al cargar módulos:", err);
     } finally {
       $loading = false;
     }
   });
+
+  // Cuando entremos en modo edición o cambie el editingRole, poblar campos y permisos
+  $: if ($modules && isEditing && editingRole) {
+    roleName = editingRole.name || "";
+    roleDescription = editingRole.description || "";
+    const map = {};
+    $modules.forEach((m) => {
+      map[m.id] = (editingRole.modules || []).includes(m.id);
+    });
+    selectedModules = map;
+  }
+
+  // Cuando pasamos a modo creación, resetear campos (no depende de cambios en selectedModules)
+  $: if ($modules && !isEditing) {
+    roleName = "";
+    roleDescription = "";
+    const map = {};
+    $modules.forEach((m) => (map[m.id] = false));
+    selectedModules = map;
+  }
 
   async function handleSubmit() {
     if (!roleName.trim()) {
@@ -133,7 +154,12 @@
               class="form-check-input"
               type="checkbox"
               id="mod-{modulo.id}"
-              bind:checked={selectedModules[modulo.id]}
+              checked={!!selectedModules[modulo.id]}
+              on:change={(e) => {
+                // actualizar y reasignar para forzar reactividad
+                selectedModules[modulo.id] = e.target.checked;
+                selectedModules = { ...selectedModules };
+              }}
             />
             <label class="form-check-label" for="mod-{modulo.id}">
               {modulo.name}

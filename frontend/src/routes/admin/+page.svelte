@@ -1,9 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
 
   // Componentes existentes
-  import UserTable from "../../lib/components/userTable.svelte";
+  import UserTable from "../../lib/components/UserTable.svelte";
   import UserForm from "../../lib/components/UserForm.svelte";
   import RoleForm from "../../lib/components/RoleForm.svelte";
   import RolePermissionsTable from "../../lib/components/RolePermissionsTable.svelte";
@@ -13,13 +12,14 @@
     fetchUsers,
     createUser,
     deleteUser,
-  } from "../../lib/services/userService.js";
-  import { fetchModules } from "../../lib/services/roleService.js";
+    updateUser,
+  } from "$lib/services/userService.js";
+  import { fetchModules } from "$lib/services/roleService.js";
   import {
     roles as roles,
     modules as modulesStore,
     loadRoles,
-  } from "../../lib/stores/roles.js";
+  } from "$lib/stores/roles.js";
 
   let activeTab: "usuarios" | "crearUsuario" | "crearRol" | "verRoles" =
     "usuarios";
@@ -27,6 +27,13 @@
   // Estado
   let users: any[] = [];
   let loading = false;
+
+  // Estado para edición de usuarios en-lugar
+  let editingUser: any = null;
+
+  // Estado para edición de roles
+  let editingRole: any = null;
+  let isEditing: boolean = false;
 
   // Form estado mínimo para crear usuario
   let newUser = {
@@ -41,6 +48,7 @@
     id_type_document: "",
     num_document: "",
     id_rol: "",
+    genero: "",
   };
 
   onMount(async () => {
@@ -71,25 +79,10 @@
   }
 
   // Acciones usuarios
-  // Abrir modal de edición en lugar de navegar
-  import Modal from "../../lib/components/Modal.svelte";
-  import UserEditForm from "../../lib/components/UserEditForm.svelte";
-  import { fetchUserById, updateUser } from "../../lib/services/userService.js";
-
-  let showEditModal = false;
-  let editingUser: any = null;
-  let savingEdit = false;
-
-  async function irAEditarUsuario(id: number) {
-    try {
-      editingUser = null;
-      showEditModal = true;
-      editingUser = await fetchUserById(id);
-    } catch (e) {
-      console.error('No se pudo cargar usuario para editar', e);
-      alert('No se pudo cargar el usuario');
-      showEditModal = false;
-    }
+  function irAEditarUsuario(user: any) {
+    // abrir el formulario de crear en modo edición con el usuario
+    editingUser = user;
+    activeTab = "crearUsuario";
   }
 
   async function eliminarUsuario(id: number) {
@@ -123,6 +116,7 @@
         id_type_document: "",
         num_document: "",
         id_rol: "",
+        genero: "",
       };
     } catch (e: any) {
       console.error(e);
@@ -130,32 +124,36 @@
     }
   }
 
-  async function handleSaveEditedUser() {
-    if (!editingUser) return;
-    savingEdit = true;
+  async function guardarEdicionUsuario(datos: any) {
     try {
-      const updated = await updateUser(editingUser);
-      // actualizar en la lista local
-      users = users.map(u => (u.id === updated.id ? updated : u));
-      showEditModal = false;
+      const actualizado = await updateUser(datos);
+      const actualizadoObj: any = actualizado;
+      // reemplazar en la lista local
+      users = users.map((u) =>
+        u.id === actualizadoObj.id ? actualizadoObj : u
+      );
+      alert("Usuario actualizado correctamente");
       editingUser = null;
+      activeTab = "usuarios";
     } catch (e) {
-      console.error('Error actualizando usuario', e);
-      alert('No se pudo guardar cambios');
-    } finally {
-      savingEdit = false;
+      console.error("Error actualizando usuario:", e);
+      alert("Error al actualizar usuario");
     }
-  }
-
-  function handleCancelEdit() {
-    showEditModal = false;
-    editingUser = null;
   }
 
   // Acciones roles (RoleForm y RolePermissionsTable manejan internamente guardar/eliminar y disparan eventos)
   function onRolGuardado() {
+    // recarga roles y resetea estado de edición
     loadRoles();
+    editingRole = null;
+    isEditing = false;
     activeTab = "verRoles";
+  }
+
+  function handleEditRole(role: any) {
+    editingRole = role;
+    isEditing = true;
+    activeTab = "crearRol";
   }
 </script>
 
@@ -183,7 +181,12 @@
     <li class="nav-item">
       <button
         class="nav-link {activeTab === 'crearRol' ? 'active' : ''}"
-        on:click={() => (activeTab = "crearRol")}
+        on:click={() => {
+          // abrir formulario en modo crear
+          editingRole = null;
+          isEditing = false;
+          activeTab = "crearRol";
+        }}
       >
         Crear Rol
       </button>
@@ -216,37 +219,52 @@
       {/if}
     </div>
 
-      {#if showEditModal}
-        <Modal size="sm" on:close={handleCancelEdit}>
-          {#if editingUser}
-            <UserEditForm {user}={editingUser} onSave={handleSaveEditedUser} onCancel={handleCancelEdit} />
-          {:else}
-            <div class="p-4">Cargando...</div>
-          {/if}
-        </Modal>
-      {/if}
-
     <!-- 🔸 FORMULARIO CREAR USUARIO -->
   {:else if activeTab === "crearUsuario"}
     <div class="card p-4 shadow-sm">
-      <h5 class="fw-bold mb-3">Crear Nuevo Usuario</h5>
-      <UserForm
-        bind:newUser
-        roles={$roles}
-        on:submit={() => {
-          /* noop */
-        }}
-        onSubmit={crearUsuario}
-      />
+      <h5 class="fw-bold mb-3">
+        {editingUser ? "Editar Usuario" : "Crear Nuevo Usuario"}
+      </h5>
+      {#if editingUser}
+        <UserForm
+          user={editingUser}
+          roles={$roles}
+          onSubmit={guardarEdicionUsuario}
+          onCancel={() => {
+            editingUser = null;
+            activeTab = "usuarios";
+          }}
+        />
+      {:else}
+        <UserForm
+          bind:newUser
+          roles={$roles}
+          on:submit={() => {
+            /* noop */
+          }}
+          onSubmit={crearUsuario}
+        />
+      {/if}
     </div>
 
     <!-- 🔸 FORMULARIO CREAR ROL -->
   {:else if activeTab === "crearRol"}
-    <RoleForm on:saved={onRolGuardado} />
+    <RoleForm
+      on:saved={onRolGuardado}
+      on:cancel={() => {
+        // al cancelar, volver a la vista de roles y recargar
+        editingRole = null;
+        isEditing = false;
+        loadRoles();
+        activeTab = "verRoles";
+      }}
+      {isEditing}
+      {editingRole}
+    />
 
     <!-- 🔸 VER ROLES -->
   {:else if activeTab === "verRoles"}
-    <RolePermissionsTable onEdit={() => goto(`/admin/roles`)} />
+    <RolePermissionsTable onEdit={handleEditRole} />
   {/if}
 </div>
 

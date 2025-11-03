@@ -1,5 +1,5 @@
 <script lang="ts">
-  export let newUser = {
+  export let newUser: any = {
     user_name: "",
     password: "",
     full_name: "",
@@ -11,7 +11,13 @@
     id_type_document: "",
     num_document: "",
     id_rol: "",
+    genero: "",
+    id: undefined,
   };
+
+  // Si se pasa `user` (modo edición), el formulario usará esos valores.
+  export let user: any = null;
+  export let onCancel: (() => void) | null = null;
 
   // Roles y tipos de documento vendrían del backend idealmente
   export let roles = [
@@ -26,13 +32,52 @@
     { id: 2, name: "Tarjeta de Identidad" },
   ];
 
-  export let onSubmit;
+  import { onMount } from "svelte";
+  let typeDocuments = documentTypes;
+
+  onMount(() => {
+    // intentar cargar desde la API, pero conservar el fallback documentTypes
+    fetch("http://127.0.0.1:8000/type_documents/")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length) typeDocuments = data;
+      })
+      .catch((e) => {
+        console.error(
+          "No se pudieron cargar tipos de documento, usando fallback",
+          e
+        );
+      });
+  });
+
+  export let onSubmit: (payload: any) => void;
+
+  // Si el componente recibe `user` (edición), sincronizamos el objeto mostrado.
+  $: if (user) {
+    // copia simple para evitar mutar el objeto padre
+    newUser = {
+      user_name: user.user_name ?? "",
+      password: user.password ?? "",
+      full_name: user.full_name ?? "",
+      last_name: user.last_name ?? "",
+      email: user.email ?? "",
+      date_birth: user.date_birth ?? "",
+      address: user.address ?? "",
+      phone: user.phone ?? "",
+      id_type_document: user.id_type_document ?? "",
+      num_document: user.num_document ?? "",
+      id_rol: user.id_rol ?? "",
+      genero: user.genero ?? "",
+      id: user.id ?? undefined,
+    };
+  }
 
   function handleSubmit() {
+    const isEdit = !!user;
     if (
       !newUser.user_name ||
       !newUser.email ||
-      !newUser.password ||
+      (!isEdit && !newUser.password) ||
       !newUser.id_rol ||
       !newUser.id_type_document
     ) {
@@ -76,19 +121,36 @@
       />
     </div>
     <div class="col-md-6">
-      <select class="form-select" bind:value={newUser.id_type_document}>
+      <label for="id_type_document" class="form-label visually-hidden"
+        >Tipo de documento</label
+      >
+      <select
+        id="id_type_document"
+        class="form-select"
+        bind:value={newUser.id_type_document}
+      >
         <option value="">Tipo de documento</option>
-        {#each documentTypes as type}
+        {#each typeDocuments as type}
           <option value={type.id}>{type.name}</option>
         {/each}
       </select>
     </div>
     <div class="col-md-6">
       <input
+        type="number"
         class="form-control"
         placeholder="Número de documento"
         bind:value={newUser.num_document}
       />
+    </div>
+    <div class="col-md-6">
+      <label for="genero" class="form-label visually-hidden">Género</label>
+      <select id="genero" class="form-select" bind:value={newUser.genero}>
+        <option value="">Género</option>
+        <option value="M">Masculino</option>
+        <option value="F">Femenino</option>
+        <option value="Otro">Otro</option>
+      </select>
     </div>
     <div class="col-md-6">
       <input type="date" class="form-control" bind:value={newUser.date_birth} />
@@ -125,7 +187,14 @@
     </div>
   </div>
 
-  <div class="d-grid mt-3">
-    <button type="submit" class="btn btn-primary">Crear Usuario</button>
+  <div class="d-flex gap-2 mt-3 justify-content-end">
+    {#if onCancel}
+      <button type="button" class="btn btn-secondary" on:click={onCancel}>
+        Cancelar
+      </button>
+    {/if}
+    <button type="submit" class="btn btn-primary">
+      {#if user}Guardar Cambios{:else}Crear Usuario{/if}
+    </button>
   </div>
 </form>

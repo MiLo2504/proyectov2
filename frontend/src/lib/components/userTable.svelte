@@ -17,7 +17,8 @@
   import { onMount, onDestroy, tick } from "svelte";
 
   export let users: User[] = [];
-  export let onEdit: (id: number) => void = () => {};
+  // ahora onEdit recibe el objeto usuario completo para permitir editar en-lugar
+  export let onEdit: (user: User) => void = () => {};
   export let onDelete: (id: number) => void = () => {};
   export let searchQuery: string = "";
   export let selectedRoleFilter: string = "Todos";
@@ -195,7 +196,7 @@
           <td>
             <button
               class="btn btn-sm btn-outline-primary me-2"
-              on:click={() => onEdit?.(user.id)}
+              on:click={() => onEdit?.(user)}
               disabled={!onEdit}>Editar</button
             >
             <button
