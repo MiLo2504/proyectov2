@@ -1,10 +1,12 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { login } from "$lib/stores/auth.js";
 
   // Estado reactivo
   let email = "";
   let password = "";
   let errorMessage = "";
+  let submitting = false;
 
   // Función para mostrar errores
   function showError(message) {
@@ -19,28 +21,31 @@
     }
 
     try {
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      submitting = true;
+      errorMessage = ""; // Limpiar errores previos
 
-      const data = await response.json();
+      // Usamos la función del store que ya apunta al backend correcto
+      const user = await login(email, password);
 
-      if (!response.ok) {
-        showError(data.detail || "Credenciales incorrectas");
-        return;
-      }
-
-      // Guardar token (puedes usar un store o cookies en lugar de localStorage)
-      localStorage.setItem("token", data.access_token);
-
-      // Redirigir usando SvelteKit
-      alert("Inicio de sesión exitoso ✅");
-      goto("/dashboard"); // Ajusta la ruta según tu aplicación
+      // Redirección según el rol del usuario
+      const role = user?.id_rol;
+      const path =
+        role === 1
+          ? "/admin"
+          : role === 2
+            ? "/doctor"
+            : role === 3
+              ? "/secretary"
+              : role === 4
+                ? "/patient"
+                : "/"; // Ruta por defecto si no hay rol
+      goto(path);
     } catch (err) {
-      showError("Error al conectar con el servidor");
+      // El store ya nos da un mensaje de error específico
+      showError(err.message || "Credenciales inválidas o error de conexión");
       console.error(err);
+    } finally {
+      submitting = false;
     }
   }
 </script>
@@ -82,8 +87,21 @@
       </div>
 
       <!-- Botón -->
-      <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
-        Iniciar sesión
+      <button
+        type="submit"
+        class="btn btn-primary w-100 py-2 fw-bold"
+        disabled={submitting}
+      >
+        {#if submitting}
+          <span
+            class="spinner-border spinner-border-sm"
+            role="status"
+            aria-hidden="true"
+          ></span>
+          Iniciando...
+        {:else}
+          Iniciar sesión
+        {/if}
       </button>
     </form>
 
