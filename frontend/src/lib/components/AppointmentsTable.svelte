@@ -1,255 +1,303 @@
-<script>
-  import { onMount, onDestroy, tick, createEventDispatcher } from "svelte";
-  import {
-    listAppointments,
-    updateAppointment,
-  } from "$lib/services/appointmentService.js";
-  import { fetchUsers } from "$lib/services/userService.js";
-  import { listStateAppointments } from "$lib/services/stateAppointmentService.js";
+<script lang="ts">
+  import { onMount, onDestroy } from "svelte";
+  import EditAppointmentModal from "$lib/components/EditAppointmentsModal.svelte";
+  export let appointments: any[] = [];
+  export let onRefresh: () => void;
+  export let onEdit: (appt: any) => void;
 
-  export let ensureDataTablesLoaded; // función inyectada desde el padre
+  let tableElement: HTMLTableElement;
+  let dataTable: any = null;
+  let dataTableAvailable = false;
+  // Modal de edición (visual)
+  let showEditModal = false;
+  let editingAppt: any = null;
 
-  const dispatch = createEventDispatcher();
-
-  let loading = true;
-  let error = "";
-  let appointments = [];
-  let users = [];
-  let apptStates = [];
-
-  // DataTables
-  let tableEl;
-  let dt = null;
-  let initialized = false;
-  let initRetries = 0;
-
-  $: userMap = Object.fromEntries((users || []).map((u) => [u.id, u]));
-  $: apptStateMap = Object.fromEntries(
-    (apptStates || []).map((s) => [s.id_state, s.state_name])
-  );
-
-  function apptStateBadgeClass(name) {
-    const n = (name || "").toLowerCase();
-    if (n.includes("pendiente") || n.includes("pending")) return "bg-secondary";
-    if (n.includes("confirmada") || n.includes("confirm")) return "bg-primary";
-    if (n.includes("cancelada") || n.includes("cancel")) return "bg-danger";
-    if (n.includes("completada") || n.includes("complete")) return "bg-success";
-    if (
-      n.includes("no asist") ||
-      n.includes("no show") ||
-      n.includes("no-show")
-    )
-      return "bg-warning text-dark";
-    return "bg-secondary";
+  function openEditModal(appt: any) {
+    editingAppt = appt;
+    showEditModal = true;
   }
 
-  function formatDate(dt) {
-    try {
-      return dt ? new Date(dt).toLocaleString() : "-";
-    } catch {
-      return "-";
+  function closeEditModal() {
+    showEditModal = false;
+    editingAppt = null;
+  }
+
+  function handleSave(event: CustomEvent) {
+    const updated = event.detail?.appointment ?? null;
+    if (!updated) return;
+    if (typeof onEdit === "function") onEdit(updated);
+    if (typeof onRefresh === "function") onRefresh();
+    closeEditModal();
+  }
+
+  // Cargar DataTables (versión moderna sin jQuery)
+  async function loadDataTables() {
+    if (typeof window === "undefined") return;
+
+    // Cargar CSS
+    if (!document.querySelector('link[href*="dataTables.bootstrap5"]')) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href =
+        "https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css";
+      document.head.appendChild(link);
     }
+
+    // Cargar DataTables UMD (sin jQuery)
+    if (!(window as any).DataTable) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdn.datatables.net/2.1.8/js/dataTables.min.js";
+        script.onload = () => resolve(null);
+        script.onerror = () => reject(new Error("Failed to load DataTables"));
+        document.head.appendChild(script);
+      });
+    }
+
+    // Cargar integración Bootstrap 5
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src =
+        "https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js";
+      script.onload = () => resolve(null);
+      script.onerror = () =>
+        reject(new Error("Failed to load Bootstrap5 plugin"));
+      document.head.appendChild(script);
+    });
+
+    // Indicar si DataTable está disponible
+    dataTableAvailable =
+      typeof window !== "undefined" && !!(window as any).DataTable;
   }
 
-  async function initDT() {
+  onMount(async () => {
     try {
-      await ensureDataTablesLoaded?.();
-      const DataTableCtor = window?.DataTable || globalThis?.DataTable;
-      // Si aún no está listo o la tabla no está conectada al DOM, reintentar unas veces
-      if (
-        (!DataTableCtor || !tableEl || !document.contains(tableEl)) &&
-        initRetries < 20
-      ) {
-        initRetries += 1;
-        await new Promise((r) => setTimeout(r, 100));
-        return initDT();
-      }
-      if (DataTableCtor && tableEl) {
-        try {
-          if (dt && typeof dt.destroy === "function") dt.destroy();
-        } catch {}
-        dt = new DataTableCtor(tableEl, {
-          paging: true,
-          searching: true,
-          ordering: true,
-          lengthMenu: [10, 25, 50, 100],
-          pageLength: 10,
-          layout: {
-            topStart: "pageLength",
-            topEnd: "search",
-            bottomStart: "info",
-            bottomEnd: "paging",
-          },
+      await loadDataTables();
+
+      // Esperar a que el DOM esté listo
+      await new Promise(requestAnimationFrame);
+
+      if (!tableElement) return;
+      // Si DataTables está disponible, inicializamos; si no, usaremos render nativo
+      if (dataTableAvailable) {
+        dataTable = new (window as any).DataTable(tableElement, {
+          data: appointments,
+          responsive: true,
           language: {
-            url: "https://cdn.datatables.net/plug-ins/2.0.8/i18n/es-ES.json",
+            url: "https://cdn.datatables.net/plug-ins/2.1.8/i18n/es-ES.json",
           },
+          columns: [
+            { data: "patient", title: "Paciente" },
+            { data: "doctor", title: "Doctor" },
+            {
+              data: "dateTime",
+              title: "Fecha y Hora",
+              render: (data) => new Date(data).toLocaleString("es-PE"),
+            },
+            { data: "reason", title: "Motivo" },
+            {
+              data: null,
+              title: "Estado",
+              render: (data) =>
+                `<span class="badge bg-${data.state === 1 ? "success" : "danger"}">
+                ${data.state === 1 ? "Activa" : "Cancelada"}
+              </span>`,
+            },
+            {
+              data: null,
+              title: "Acciones",
+              orderable: false,
+              render: (data) => `
+              <button class="btn btn-sm btn-primary edit-btn" data-id="${data.id}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button class="btn btn-sm btn-danger delete-btn" data-id="${data.id}">
+                <i class="bi bi-trash"></i>
+              </button>
+            `,
+            },
+          ],
         });
-        initialized = true;
-        initRetries = 0;
+      } else {
+        // Fallback: renderizar tabla sin DataTables
+        renderPlainTable();
       }
-    } catch (e) {
-      console.error("DT citas:", e);
+
+      // Eventos delegados
+      tableElement.addEventListener("click", (e) => {
+        // `closest` devuelve un Element; en TS Element no garantiza `dataset`.
+        // Usamos getAttribute('data-id') (disponible en Element) para evitar errores
+        // de tipado y runtime cuando el target no es un HTMLElement.
+        const clicked = e.target as HTMLElement;
+        const targetEl = clicked.closest(".edit-btn, .delete-btn");
+        if (!targetEl) return;
+
+        const idAttr = targetEl.getAttribute("data-id") || "";
+        const id = parseInt(idAttr, 10);
+        if (isNaN(id)) return;
+
+        const appt = appointments.find((a) => a.id === id);
+        if (!appt) return;
+
+        const classList = (targetEl as Element).classList;
+        if (classList.contains("edit-btn")) {
+          // abrir modal de edición visual
+          openEditModal(appt);
+        } else if (classList.contains("delete-btn")) {
+          if (confirm("¿Cancelar esta cita?")) {
+            cancelAppointment(id);
+          }
+        }
+      });
+    } catch (err) {
+      console.error("Error inicializando DataTable:", err);
     }
-  }
-
-  async function loadData() {
-    loading = true;
-    error = "";
-    try {
-      const [apps, allUsers, states] = await Promise.all([
-        listAppointments().catch(() => []),
-        fetchUsers().catch(() => []),
-        listStateAppointments().catch(() => []),
-      ]);
-      appointments = apps || [];
-      users = allUsers || [];
-      apptStates = states || [];
-    } catch (e) {
-      error = e?.message || "Error cargando citas";
-    } finally {
-      // aseguramos que la tabla esté en el DOM antes de initDT
-      loading = false;
-      await tick();
-      if (!error) {
-        await initDT();
-        dispatch("loaded", { total: appointments.length });
-      }
-    }
-  }
-
-  onMount(loadData);
-
-  onDestroy(() => {
-    try {
-      if (dt && typeof dt.destroy === "function") dt.destroy();
-    } catch {}
-    dt = null;
-    initialized = false;
   });
 
-  // API pública para permitir refresh desde el padre si fuera necesario
-  export async function refresh() {
-    try {
-      if (dt && typeof dt.destroy === "function") dt.destroy();
-    } catch {}
-    dt = null;
-    initialized = false;
-    initRetries = 0;
-    await loadData();
+  function renderPlainTable() {
+    if (!tableElement) return;
+    let tbody = tableElement.tBodies[0];
+    if (!tbody) {
+      tbody = document.createElement("tbody");
+      tableElement.appendChild(tbody);
+    }
+
+    if (!appointments || appointments.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center">No hay citas</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = appointments
+      .map((a) => {
+        const date = a.dateTime
+          ? new Date(a.dateTime).toLocaleString("es-PE")
+          : "";
+        const estado =
+          a.state === 1
+            ? `<span class="badge bg-success">Activa</span>`
+            : `<span class="badge bg-danger">Cancelada</span>`;
+        return `
+          <tr>
+            <td>${escapeHtml(String(a.patient || ""))}</td>
+            <td>${escapeHtml(String(a.doctor || ""))}</td>
+            <td>${escapeHtml(date)}</td>
+            <td>${escapeHtml(String(a.reason || ""))}</td>
+            <td>${estado}</td>
+            <td>
+              <button class="btn btn-sm btn-primary edit-btn" data-id="${a.id}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button class="btn btn-sm btn-danger delete-btn" data-id="${a.id}">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+          </tr>`;
+      })
+      .join("");
   }
 
-  async function changeAppointmentState(appt, newStateId) {
-    if (!appt || !appt.id_appointment) return;
+  // pequeña función para escapar texto antes de inyectarlo en innerHTML
+  function escapeHtml(str: string) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  async function cancelAppointment(id: number) {
     try {
-      const updated = await updateAppointment(appt.id_appointment, {
-        id_state: newStateId,
+      const res = await fetch(`/api/appointments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state: 0 }),
       });
-      if (updated) {
-        appointments = (appointments || []).map((x) =>
-          x?.id_appointment === appt.id_appointment
-            ? { ...x, id_state: updated.id_state }
-            : x
-        );
-        try {
-          if (dt && typeof dt.destroy === "function") dt.destroy();
-        } catch {}
-        dt = null;
-        initialized = false;
-        await tick();
-        await initDT();
+      if (res.status === 404) {
+        alert("Endpoint para cancelar citas no implementado (404).");
+        return;
       }
-    } catch (e) {
-      console.error("No se pudo cambiar estado de cita:", e);
-      alert(e?.message || "Error cambiando estado");
+      if (!res.ok) throw new Error();
+      alert("Cita cancelada");
+      onRefresh();
+    } catch {
+      alert("Error al cancelar");
     }
   }
+
+  // Reactividad: actualizar datos
+  $: if (dataTable && appointments) {
+    // Si DataTables está activo, intentamos usar su API; si no, render nativo
+    try {
+      if (typeof dataTable.clear === "function") {
+        dataTable.clear();
+        if (dataTable.rows && typeof dataTable.rows.add === "function") {
+          dataTable.rows.add(appointments);
+        } else if (typeof dataTable.data === "function") {
+          // posible API alternativa
+          dataTable.data(appointments);
+        }
+        if (typeof dataTable.draw === "function") dataTable.draw();
+      } else if (typeof dataTable.data === "function") {
+        dataTable.data(appointments);
+      } else {
+        // API desconocida -> destruir y reinit para garantizar consistencia
+        try {
+          dataTable.destroy();
+        } catch (e) {}
+        dataTable = new (window as any).DataTable(tableElement, {
+          data: appointments,
+        });
+      }
+    } catch (e) {
+      console.warn("Error actualizando DataTable, se usará render nativo", e);
+      renderPlainTable();
+    }
+  } else if (!dataTable) {
+    // Si no hay instancia de DataTable, renderizamos la tabla nativamente
+    renderPlainTable();
+  }
+
+  onDestroy(() => {
+    if (dataTable && typeof dataTable.destroy === "function")
+      dataTable.destroy();
+  });
 </script>
 
-{#if loading}
-  <div class="alert alert-info">Cargando citas...</div>
-{:else if error}
-  <div class="alert alert-danger">{error}</div>
-{:else}
-  <div class="table-responsive">
-    <table class="table table-striped align-middle" bind:this={tableEl}>
-      <thead class="table-light">
-        <tr>
-          <th>ID</th>
-          <th>Paciente</th>
-          <th>Fecha</th>
-          <th>Estado</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each appointments as c}
-          <tr>
-            <td>{c?.id_appointment}</td>
-            <td
-              >{userMap[c?.id_user]?.full_name ||
-                userMap[c?.id_user]?.name ||
-                c?.id_user ||
-                "-"}</td
-            >
-            <td>{formatDate(c?.appointment_date)}</td>
-            <td>
-              {#key c?.id_state}
-                <span
-                  class="badge {apptStateBadgeClass(apptStateMap[c?.id_state])}"
-                >
-                  {apptStateMap[c?.id_state] || c?.id_state || "-"}
-                </span>
-              {/key}
-            </td>
-            <td>
-              <div class="d-flex align-items-center gap-2">
-                <select
-                  class="form-select form-select-sm"
-                  value={c?.id_state}
-                  on:change={(e) => {
-                    const v = Number(e.currentTarget?.value);
-                    if (!Number.isFinite(v) || v === c?.id_state) return;
-                    changeAppointmentState(c, v);
-                  }}
-                >
-                  {#each apptStates as s}
-                    <option
-                      value={s.id_state}
-                      selected={s.id_state === c?.id_state}
-                      >{s.state_name}</option
-                    >
-                  {/each}
-                </select>
-              </div>
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
-{/if}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="fw-bold mb-0">Citas Programadas</h5>
+      <button class="btn btn-outline-primary btn-sm" on:click={onRefresh}>
+        Actualizar
+      </button>
+    </div>
 
-<style>
-  :global(.dataTables_wrapper .dataTables_length select),
-  :global(.dataTables_wrapper .dataTables_filter input) {
-    border: 1px solid #ced4da;
-    border-radius: 0.375rem;
-    padding: 0.375rem 0.75rem;
-  }
-  .badge {
-    font-weight: 500;
-  }
-  .table td,
-  .table th {
-    vertical-align: middle;
-  }
-  .table {
-    width: 100%;
-  }
-  .table-responsive {
-    overflow-x: auto;
-  }
-  .table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(0, 0, 0, 0.02);
-  }
-</style>
+    <div class="table-responsive">
+      <table
+        bind:this={tableElement}
+        class="table table-hover"
+        style="width:100%"
+      >
+        <thead class="table-light">
+          <tr>
+            <th>Paciente</th>
+            <th>Doctor</th>
+            <th>Fecha y Hora</th>
+            <th>Motivo</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <!-- Modal de edición visual -->
+    <EditAppointmentModal
+      open={showEditModal}
+      appointment={editingAppt}
+      on:close={closeEditModal}
+      on:save={handleSave}
+    />
+  </div>
+</div>

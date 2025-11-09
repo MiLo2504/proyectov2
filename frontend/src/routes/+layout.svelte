@@ -3,7 +3,7 @@
   import "bootstrap/dist/css/bootstrap.min.css";
 
   import Footer from "../lib/components/Footer.svelte";
-  import Navbar from "../lib/components/navbar.svelte";
+  import Navbar from "../lib/components/Navbar.svelte";
 </script>
 
 <main class="flex-grow-1">
