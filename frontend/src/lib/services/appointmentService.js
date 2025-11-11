@@ -2,10 +2,30 @@
 
 const API_URL = "http://127.0.0.1:8000/appointments";
 
-// Listar todas las citas
-export async function listAppointments() {
+// Función auxiliar para obtener los headers de autenticación
+function getAuthHeaders() {
   try {
-    const res = await fetch(`${API_URL}/`);
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+// Listar citas según el rol
+export async function listAppointments(role = "doctor") {
+  try {
+    // Si es doctor, usar el endpoint /mine que filtra por el doctor autenticado
+    // Si es secretario o admin, usar el endpoint general que devuelve todas
+    const endpoint = role === "doctor" ? `${API_URL}/mine` : `${API_URL}`;
+    
+    const res = await fetch(endpoint, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      }
+    });
+    
     if (!res.ok) throw new Error("Error al cargar citas");
     return await res.json();
   } catch (err) {
@@ -15,7 +35,6 @@ export async function listAppointments() {
 }
 
 // Crear cita
-// payload: { id_user: number, appointment_date: string|Date ISO, id_state: number }
 export async function createAppointment(payload) {
   try {
     const body = {
@@ -25,7 +44,10 @@ export async function createAppointment(payload) {
     };
     const res = await fetch(`${API_URL}/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders()
+      },
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error("Error al crear cita");
@@ -42,8 +64,7 @@ export async function processRequest(request) {
   return { success: true };
 }
 
-// Actualizar una cita (parcial) - por ejemplo para cambiar id_state
-// partial: { id_user?, appointment_date?, id_state? }
+// Actualizar una cita
 export async function updateAppointment(id, partial) {
   try {
     const body = {};
@@ -53,7 +74,10 @@ export async function updateAppointment(id, partial) {
 
     const res = await fetch(`${API_URL}/${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders()
+      },
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error("Error al actualizar cita");

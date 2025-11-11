@@ -13,13 +13,13 @@
     createUser,
     deleteUser,
     updateUser,
-  } from "$lib/services/userService.js";
-  import { fetchModules } from "$lib/services/roleService.js";
+  } from "../../lib/services/userService.js";
+  import { fetchModules } from "../../lib/services/roleService.js";
   import {
     roles as roles,
     modules as modulesStore,
     loadRoles,
-  } from "$lib/stores/roles.js";
+  } from "../../lib/stores/roles.js";
 
   let activeTab: "usuarios" | "crearUsuario" | "crearRol" | "verRoles" =
     "usuarios";

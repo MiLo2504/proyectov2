@@ -9,76 +9,6 @@
   let apptComp;
   let anComp;
 
-  function loadCssOnce(href) {
-    if (typeof document === "undefined") return;
-    if ([...document.styleSheets].some((s) => s?.href && s.href.includes(href)))
-      return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = href;
-    link.setAttribute("data-injected-by", "doctorPage");
-    document.head.appendChild(link);
-  }
-
-  function loadScriptOnce(src) {
-    if (typeof document === "undefined") return Promise.resolve();
-    if ([...document.scripts].some((s) => s?.src && s.src.includes(src)))
-      return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = src;
-      script.async = true;
-      script.setAttribute("data-injected-by", "doctorPage");
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
-      document.body.appendChild(script);
-    });
-  }
-
-  let dtLoadingPromise = null;
-  async function ensureDataTablesLoaded() {
-    // Evitar cargas duplicadas concurrentes
-    if (dtLoadingPromise) return dtLoadingPromise;
-    dtLoadingPromise = (async () => {
-      // CSS base + tema bootstrap (faltaba el core css para estilos completos)
-      loadCssOnce(
-        "https://cdn.datatables.net/2.3.4/css/dataTables.dataTables.css"
-      );
-      loadCssOnce(
-        "https://cdn.datatables.net/2.3.4/css/dataTables.bootstrap5.css"
-      );
-      // Scripts: bootstrap primero (para estilos y modal), luego núcleo DataTables y adaptación bootstrap
-      await loadScriptOnce(
-        "https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"
-      );
-      await loadScriptOnce("https://cdn.datatables.net/2.3.4/js/dataTables.js");
-      await loadScriptOnce(
-        "https://cdn.datatables.net/2.3.4/js/dataTables.bootstrap5.js"
-      );
-      // Polling hasta que exista window.DataTable (seguridad por asincronía)
-      const start = Date.now();
-      while (typeof window !== "undefined" && !window.DataTable) {
-        if (Date.now() - start > 4000) {
-          console.error("Timeout esperando DataTables");
-          break;
-        }
-        await new Promise((r) => setTimeout(r, 50));
-      }
-    })();
-    return dtLoadingPromise;
-  }
-
-  onMount(() => {
-    // Pre-cargar DataTables antes de que los componentes lo pidan para reducir condiciones de carrera
-    ensureDataTablesLoaded().catch((e) =>
-      console.error("Error pre-cargando DataTables", e)
-    );
-  });
-
-  onDestroy(() => {
-    // sin referencias globales a DataTables aquí
-  });
-
   // Refrescar análisis cuando la ventana recupere visibilidad
   if (typeof document !== "undefined") {
     const onVisible = async () => {
@@ -142,19 +72,19 @@
 
     <div class="tab-content">
       <div
-        class="tab-pane fade {activeTab === 'citas' ? 'show active' : ''}"
-        role="tabpanel"
-      >
-        {#if activeTab === "citas"}
-          <AppointmentsTable bind:this={apptComp} {ensureDataTablesLoaded} />
-        {/if}
-      </div>
-      <div
         class="tab-pane fade {activeTab === 'analisis' ? 'show active' : ''}"
         role="tabpanel"
       >
         {#if activeTab === "analisis"}
-          <AnalysesTable bind:this={anComp} {ensureDataTablesLoaded} />
+          <AnalysesTable bind:this={anComp} />
+        {/if}
+      </div>
+      <div
+        class="tab-pane fade {activeTab === 'citas' ? 'show active' : ''}"
+        role="tabpanel"
+      >
+        {#if activeTab === "citas"}
+          <AppointmentsTable bind:this={apptComp} />
         {/if}
       </div>
     </div>

@@ -35,9 +35,9 @@
           : role === 2
             ? "/doctor"
             : role === 3
-              ? "/secretary"
-              : role === 4
-                ? "/patient"
+              ? "/patient"
+              : role === 4 || role === 7
+                ? "/secretary"
                 : "/"; // Ruta por defecto si no hay rol
       goto(path);
     } catch (err) {

@@ -4,8 +4,6 @@
   import { fetchUsers } from "$lib/services/userService.js";
   import { listStateAnalysis } from "$lib/services/stateAnalysisService.js";
 
-  export let ensureDataTablesLoaded; // Función del padre para cargar librerías.
-
   const dispatch = createEventDispatcher();
 
   let loading = true;
@@ -74,9 +72,51 @@
     return "bg-secondary";
   }
 
+  function loadCssOnce(href) {
+    if (typeof document === "undefined") return;
+    if ([...document.styleSheets].some((s) => s?.href && s.href.includes(href)))
+      return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.setAttribute("data-injected-by", "analysesTable");
+    document.head.appendChild(link);
+  }
+
+  function loadScriptOnce(src) {
+    if (typeof document === "undefined") return Promise.resolve();
+    if ([...document.scripts].some((s) => s?.src && s.src.includes(src)))
+      return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = true;
+      script.setAttribute("data-injected-by", "analysesTable");
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
+      document.body.appendChild(script);
+    });
+  }
+
+  async function ensureDataTablesLoaded() {
+    // DataTables v2 (vanilla) + Bootstrap integration
+    loadCssOnce(
+      "https://cdn.datatables.net/2.3.4/css/dataTables.bootstrap5.css"
+    );
+    // Bootstrap bundle (required by some styles)
+    await loadScriptOnce(
+      "https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"
+    );
+    // DataTables v2 (vanilla)
+    await loadScriptOnce("https://cdn.datatables.net/2.3.4/js/dataTables.js");
+    await loadScriptOnce(
+      "https://cdn.datatables.net/2.3.4/js/dataTables.bootstrap5.js"
+    );
+  }
+
   async function initDT() {
     try {
-      await ensureDataTablesLoaded?.();
+      await ensureDataTablesLoaded();
       const DataTableCtor = window?.DataTable || globalThis?.DataTable;
       if (
         (!DataTableCtor || !tableEl || !document.contains(tableEl)) &&

@@ -1,30 +1,21 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import AppointmentForm from "$lib/components/AppointmentsForm.svelte";
   import AppointmentsTable from "$lib/components/AppointmentsTable.svelte";
-  import { appointments, loading } from "$lib/stores/appointments.js";
-  import { listAppointments } from "$lib/services/appointmentService.js";
 
   let activeTab = "list"; // 'list' o 'create'
-
-  // onMount(async () => {
-  //   await loadAppointments();
-  // });
-
-  async function loadAppointments() {
-    $loading = true;
-    try {
-      $appointments = await listAppointments();
-    } catch (err) {
-      alert("Error al cargar citas");
-    } finally {
-      $loading = false;
-    }
-  }
+  let appointmentsTableRef: any;
 
   function openCreateForm() {
     activeTab = "create";
+  }
+
+  async function onAppointmentCreated() {
+    activeTab = "list";
+    // Refrescar la tabla de citas
+    if (appointmentsTableRef) {
+      await appointmentsTableRef.refresh();
+    }
   }
 </script>
 
@@ -59,26 +50,18 @@
   <div class="tab-content">
     <!-- Lista de Citas -->
     <div class="tab-pane fade {activeTab === 'list' ? 'show active' : ''}">
-      <AppointmentsTable
-        appointments={$appointments}
-        onRefresh={loadAppointments}
-        onEdit={(appt) => {
-          // Podrías pasar el appt al form
-          alert(`Editar cita con ${appt.patient}`);
-        }}
-      />
+      {#if activeTab === "list"}
+        <AppointmentsTable role="secretary" bind:this={appointmentsTableRef} />
+      {/if}
     </div>
 
     <!-- Formulario -->
     <div class="tab-pane fade {activeTab === 'create' ? 'show active' : ''}">
-      <div class="col-lg-8 mx-auto">
-        <AppointmentForm
-          onSuccess={() => {
-            activeTab = "list";
-            loadAppointments();
-          }}
-        />
-      </div>
+      {#if activeTab === "create"}
+        <div class="col-lg-8 mx-auto">
+          <AppointmentForm onSuccess={onAppointmentCreated} />
+        </div>
+      {/if}
     </div>
   </div>
 </div>
