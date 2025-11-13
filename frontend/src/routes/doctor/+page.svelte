@@ -5,7 +5,7 @@
 
   let loading = false;
   let error = "";
-  let activeTab = "analisis";
+  let activeTab = "dashboard";
   let apptComp;
   let anComp;
 
@@ -48,6 +48,17 @@
     <ul class="nav nav-tabs mb-3" role="tablist">
       <li class="nav-item" role="presentation">
         <button
+          class="nav-link {activeTab === 'dashboard' ? 'active' : ''}"
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "dashboard"}
+          on:click={() => switchTab("dashboard")}
+        >
+          Dashboard
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button
           class="nav-link {activeTab === 'analisis' ? 'active' : ''}"
           type="button"
           role="tab"
@@ -71,6 +82,24 @@
     </ul>
 
     <div class="tab-content">
+      <div
+        class="tab-pane fade {activeTab === 'dashboard' ? 'show active' : ''}"
+        role="tabpanel"
+      >
+        {#if activeTab === "dashboard"}
+          <div class="card p-3 shadow-sm">
+            <h5 class="fw-bold mb-3">Dashboard de Análisis</h5>
+            <div class="ratio ratio-16x9">
+              <iframe
+                title="dashboard"
+                src="https://app.powerbi.com/view?r=eyJrIjoiNjQ5ZTlhYWUtNjI3MS00YWZkLWE0ZjMtZmQ4ZjBjYTU5YWQ0IiwidCI6IjFlOWFhYmU4LTY3ZjgtNGYxYy1hMzI5LWE3NTRlOTI0OTlhZSIsImMiOjR9"
+                frameborder="0"
+                allowFullScreen={true}
+              ></iframe>
+            </div>
+          </div>
+        {/if}
+      </div>
       <div
         class="tab-pane fade {activeTab === 'analisis' ? 'show active' : ''}"
         role="tabpanel"
