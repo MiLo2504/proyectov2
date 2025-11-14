@@ -5,6 +5,7 @@
   import PatientInfoCard from "$lib/components/PatientInfoCard.svelte";
   import AnalysisUpload from "$lib/components/AnalysisUpload.svelte";
   import AnalysisList from "$lib/components/AnalysisList.svelte";
+  import AppointmentsForm from "$lib/components/AppointmentsForm.svelte";
   import {
     fetchPatient,
     updatePatient,
@@ -153,10 +154,16 @@
     </div>
 
     <div class="tab-pane fade {activeTab === 'schedule' ? 'show active' : ''}">
-      <div class="col-lg-7 mx-auto">
-        <div class="alert alert-info text-center" role="alert">
-          La funcionalidad para agendar citas no está disponible temporalmente.
-        </div>
+      <div class="col-lg-8 mx-auto">
+        <AppointmentsForm
+          isPatientView={true}
+          onSuccess={() => {
+            alert(
+              "Cita agendada exitosamente. Podrás ver tus citas próximamente."
+            );
+            activeTab = "profile";
+          }}
+        />
       </div>
     </div>
 
