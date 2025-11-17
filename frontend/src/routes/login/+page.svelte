@@ -27,18 +27,39 @@
       // Usamos la función del store que ya apunta al backend correcto
       const user = await login(email, password);
 
-      // Redirección según el rol del usuario
+      // Redirección inteligente basada en rol Y permisos
       const role = user?.id_rol;
-      const path =
-        role === 1
-          ? "/admin"
-          : role === 2
-            ? "/doctor"
-            : role === 3
-              ? "/patient"
-              : role === 4 || role === 7
-                ? "/secretary"
-                : "/"; // Ruta por defecto si no hay rol
+      const modules = user?.modules || [];
+      const hasModule = (name) => modules.some((m) => m.name === name);
+
+      let path = "/"; // Ruta por defecto
+
+      // Prioridad: roles predefinidos primero
+      if (role === 1) {
+        path = "/admin";
+      } else if (role === 2) {
+        path = "/doctor";
+      } else if (role === 3) {
+        path = "/patient";
+      } else if (role === 4 || role === 6) {
+        path = "/secretary";
+      }
+      // Para roles personalizados, redirigir según permisos
+      else if (hasModule("Administración")) {
+        path = "/admin";
+      } else if (hasModule("Citas")) {
+        path = "/secretary"; // Si tiene citas pero no es rol predefinido
+      } else if (hasModule("Pacientes")) {
+        path = "/secretary";
+      } else {
+        // Si no tiene permisos claros, mostrar mensaje
+        showError(
+          "Tu cuenta no tiene permisos asignados. Contacta al administrador."
+        );
+        submitting = false;
+        return;
+      }
+
       goto(path);
     } catch (err) {
       // El store ya nos da un mensaje de error específico

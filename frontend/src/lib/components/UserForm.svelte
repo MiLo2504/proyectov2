@@ -57,7 +57,7 @@
     // copia simple para evitar mutar el objeto padre
     newUser = {
       user_name: user.user_name ?? "",
-      password: user.password ?? "",
+      password: "", // Dejar vacío para no mostrar la contraseña encriptada
       full_name: user.full_name ?? "",
       last_name: user.last_name ?? "",
       email: user.email ?? "",
@@ -85,8 +85,14 @@
       return;
     }
 
-    // Envía el objeto completo con nombres compatibles con la BD
-    onSubmit(newUser);
+    // Filtrar la contraseña si está vacía para no enviarla en edición
+    const dataToSubmit = { ...newUser };
+    if (isEdit && !dataToSubmit.password) {
+      delete dataToSubmit.password;
+    }
+
+    // Envía el objeto con nombres compatibles con la BD
+    onSubmit(dataToSubmit);
   }
 </script>
 
@@ -173,8 +179,11 @@
       <input
         type="password"
         class="form-control"
-        placeholder="Contraseña"
+        placeholder={user
+          ? "Nueva contraseña (dejar en blanco para no cambiar)"
+          : "Contraseña"}
         bind:value={newUser.password}
+        autocomplete="new-password"
       />
     </div>
     <div class="col-md-12">
