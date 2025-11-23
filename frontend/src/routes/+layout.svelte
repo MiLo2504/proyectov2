@@ -6,8 +6,23 @@
   import Navbar from "../lib/components/Navbar.svelte";
 </script>
 
-<main class="flex-grow-1">
-  <slot />
-</main>
+<div class="app-container">
+  <main class="flex-grow-1">
+    <slot />
+  </main>
 
-<Footer />
+  <Footer />
+</div>
+
+<style>
+  :global(html, body) {
+    height: 100%;
+    margin: 0;
+  }
+
+  .app-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+</style>

@@ -45,7 +45,8 @@ export async function login(username, password) {
   const res = await fetch('http://127.0.0.1:8000/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({ username, password }),
+    credentials: 'include' // Importante para enviar/recibir cookies
   });
   if (!res.ok) {
     try {
@@ -60,12 +61,22 @@ export async function login(username, password) {
   
   // Obtener información del usuario incluyendo sus permisos/módulos
   const meRes = await fetch('http://127.0.0.1:8000/auth/me', {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
+    credentials: 'include'
   });
   const user = meRes.ok ? await meRes.json() : null;
   
+  // Guardar token en localStorage Y en cookie para que hooks.server.js lo vea
   localStorage.setItem('token', token);
   localStorage.setItem('user', JSON.stringify(user));
+  
+  // Guardar token en cookie también con todas las opciones necesarias
+  const maxAge = 7 * 24 * 60 * 60; // 7 días
+  document.cookie = `token=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+  
+  console.log('[AUTH] Cookie establecida:', document.cookie.includes('token='));
+  console.log('[AUTH] Cookies actuales:', document.cookie.split('; ').filter(c => c.startsWith('token=')));
+  
   auth.set({ token, user, loggedIn: true });
   
   console.log('Usuario logueado con permisos:', user?.modules);
@@ -75,6 +86,8 @@ export async function login(username, password) {
 export function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  // Eliminar cookie también
+  document.cookie = 'token=; path=/; max-age=0';
   auth.set({ token: null, user: null, loggedIn: false });
 }
 

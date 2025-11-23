@@ -6,23 +6,35 @@
   export let onDelete = handleDelete;
 
   async function handleDelete(roleId) {
-    if (!confirm("¿Seguro que deseas eliminar este rol?")) return;
+    // Buscar el rol para mostrar su nombre en la confirmación
+    const role = $roles.find((r) => r.id === roleId);
+    const roleName = role ? role.name : "este rol";
+
+    const confirmMsg = `¿Estás seguro de eliminar el rol "${roleName}"?\n\nNota: No se puede eliminar si tiene usuarios asignados.`;
+
+    if (!confirm(confirmMsg)) return;
+
     $loading = true;
     try {
       await deleteRole(roleId);
       $roles = $roles.filter((r) => r.id !== roleId);
-      alert("Rol eliminado correctamente");
+      alert("✅ Rol eliminado correctamente");
     } catch (err) {
       console.error("Error al eliminar rol:", err);
-      alert("Error al eliminar el rol");
+
+      // Manejar mensajes de error específicos
+      let errorMsg = "Error al eliminar el rol";
+      if (err.body && err.body.detail) {
+        errorMsg = err.body.detail;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+
+      alert("❌ " + errorMsg);
     } finally {
       $loading = false;
     }
   }
-
-  // Depuración
-  $: console.log("Roles:", $roles);
-  $: console.log("Modules:", $modules);
 </script>
 
 <div class="card shadow-sm">
@@ -48,9 +60,9 @@
               {#each $modules as mod (mod.id)}
                 <td>
                   {#if role.modules && Array.isArray(role.modules) && role.modules.includes(mod.id)}
-                    OK
+                    <span class="badge bg-success">✓</span>
                   {:else}
-                    --
+                    <span class="text-muted">—</span>
                   {/if}
                 </td>
               {/each}

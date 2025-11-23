@@ -67,13 +67,23 @@
       return;
     }
 
+    if (roleName.trim().length < 3) {
+      alert("El nombre del rol debe tener al menos 3 caracteres");
+      return;
+    }
+
     const permisosSeleccionados = Object.entries(selectedModules)
       .filter(([_, value]) => value)
       .map(([id]) => parseInt(id));
 
+    if (permisosSeleccionados.length === 0) {
+      alert("Debes seleccionar al menos un módulo para el rol");
+      return;
+    }
+
     const roleData = {
-      role_name: roleName,
-      description: roleDescription,
+      role_name: roleName.trim(),
+      description: roleDescription.trim(),
       permissions: permisosSeleccionados,
     };
 
@@ -81,37 +91,55 @@
     try {
       if (isEditing) {
         await updateRole(editingRole.id, roleData);
-        alert("Rol actualizado exitosamente");
+        alert("✅ Rol actualizado exitosamente");
       } else {
         await createRole(roleData);
-        alert("Rol creado exitosamente");
+        alert("✅ Rol creado exitosamente");
       }
       dispatch("saved");
     } catch (err) {
       console.error("Error al guardar rol:", err);
-      alert("Error al guardar el rol: " + err.message);
+
+      // Manejar mensajes de error específicos del backend
+      let errorMsg = "Error al guardar el rol";
+      if (err.body && err.body.detail) {
+        errorMsg = err.body.detail;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+
+      alert("❌ " + errorMsg);
     } finally {
       $loading = false;
     }
   }
 
   async function handleDelete() {
-    if (
-      isEditing &&
-      editingRole &&
-      confirm("¿Seguro que deseas eliminar este rol?")
-    ) {
-      $loading = true;
-      try {
-        await deleteRole(editingRole.id);
-        alert("Rol eliminado exitosamente");
-        dispatch("saved");
-      } catch (err) {
-        console.error("Error al eliminar rol:", err);
-        alert("Error al eliminar el rol");
-      } finally {
-        $loading = false;
+    if (!isEditing || !editingRole) return;
+
+    const confirmMsg = `¿Estás seguro de eliminar el rol "${editingRole.name}"?\n\nEsta acción no se puede deshacer.`;
+
+    if (!confirm(confirmMsg)) return;
+
+    $loading = true;
+    try {
+      await deleteRole(editingRole.id);
+      alert("✅ Rol eliminado exitosamente");
+      dispatch("saved");
+    } catch (err) {
+      console.error("Error al eliminar rol:", err);
+
+      // Manejar mensajes de error específicos
+      let errorMsg = "Error al eliminar el rol";
+      if (err.body && err.body.detail) {
+        errorMsg = err.body.detail;
+      } else if (err.message) {
+        errorMsg = err.message;
       }
+
+      alert("❌ " + errorMsg);
+    } finally {
+      $loading = false;
     }
   }
 
