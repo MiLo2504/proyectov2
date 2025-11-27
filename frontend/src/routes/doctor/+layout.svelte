@@ -1,18 +1,36 @@
 <script>
   import DoctorNavbar from "../../lib/components/DoctorNavbar.svelte";
-  import { auth } from "$lib/stores/auth.js";
+  import { onMount } from "svelte";
 
-  let currentUser = null;
+  let doctorName = "Doctor"; // valor por defecto mientras carga
 
-  // Nos suscribimos al store de autenticación
-  auth.subscribe((value) => {
-    currentUser = value.user;
+  // Función para leer y parsear la cookie user_data
+  function getUserFromCookie() {
+    if (typeof document === "undefined") return null; // por SSR
+
+    const match = document.cookie.match(/(?:^|; )user_data=([^;]*)/);
+    if (!match) return null;
+
+    try {
+      const value = decodeURIComponent(match[1]);
+      return JSON.parse(value);
+    } catch (e) {
+      console.error("Error al parsear user_data:", e);
+      return null;
+    }
+  }
+
+  onMount(() => {
+    const user = getUserFromCookie();
+    if (user) {
+      // Construimos el nombre usando los campos que vienen de la API
+      const fullName = user.full_name || user.user_name || "";
+      const lastName = user.last_name || "";
+      const combined = `${fullName} ${lastName}`.trim();
+
+      doctorName = combined || "Doctor";
+    }
   });
-
-  // Nombre completo del doctor, combinando full_name + last_name
-  $: doctorName = currentUser
-    ? `${currentUser.full_name || currentUser.user_name || ""} ${currentUser.last_name || ""}`.trim()
-    : "Doctor";
 </script>
 
 <DoctorNavbar nombre={doctorName} />

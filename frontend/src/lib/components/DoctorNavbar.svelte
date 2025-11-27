@@ -13,6 +13,7 @@
 </script>
 
 
+
 <nav class="navbar navbar-expand-lg navbar-light bg-white shadow">
   <div class="container">
     <a class="navbar-brand text-primary fw-bold" href="/doctor">MediVision</a>
