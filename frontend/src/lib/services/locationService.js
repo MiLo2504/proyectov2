@@ -1,6 +1,6 @@
 // src/lib/services/locationService.js
 
-const API_URL = "http://localhost:3000/api";
+const API_URL = "https://mysql-130f1eb7-moisessolis-5a83.c.aivencloud.com:3000";
 
 // Obtener todos los departamentos
 export async function fetchDepartments() {

@@ -1,196 +1,290 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { auth } from "$lib/stores/auth.js";
+  import { auth } from "$lib/stores/auth";
   import PatientInfoForm from "$lib/components/PatientInfoForm.svelte";
   import PatientInfoCard from "$lib/components/PatientInfoCard.svelte";
   import AnalysisUpload from "$lib/components/AnalysisUpload.svelte";
   import AnalysisList from "$lib/components/AnalysisList.svelte";
   import AppointmentsForm from "$lib/components/AppointmentsForm.svelte";
+
   import {
     fetchPatient,
     updatePatient,
     uploadAnalysis,
-    fetchAnalyses,
-  } from "$lib/services/patientService.js";
+    fetchAnalyses
+  } from "$lib/services/patientService";
 
+  // Estado principal de la página
   let patient: any = null;
+  let loadingPatient = true;
   let analyses: any[] = [];
-  let loading = false;
-  let activeTab = "profile"; // Empezar en el perfil
+  let analysesLoading = false;
+  let selectedAnalysis: any = null;
+  let activeTab: "profile" | "analysis" | "appointments" | "actualizar" = "profile";
+  let editMode = false; // por si usas modo edición en datos del paciente
 
-  // Suscribirse al store de autenticación para obtener el paciente
-  auth.subscribe((value) => {
-    if (value.user) {
-      patient = value.user;
-    }
-  });
-
+  // =========================================
+  // CARGA INICIAL
+  // =========================================
   onMount(async () => {
-    // Si el paciente no está en el store, intentar cargarlo
-    if (!patient) {
-      loading = true;
-      try {
-        patient = await fetchPatient(); // fetchPatient ahora usa /users/me
-        auth.update((current) => ({ ...current, user: patient })); // Actualizar el store
-      } catch (e) {
-        console.error("Error cargando paciente", e);
-      } finally {
-        loading = false;
-      }
+    // 1) Tomar el usuario del store auth
+    let storedUser: any = null;
+    const unsubscribe = auth.subscribe((value) => {
+      storedUser = value?.user || null;
+    });
+    unsubscribe();
+
+    if (!storedUser || !storedUser.id) {
+      console.warn("No hay usuario en auth store");
+      loadingPatient = false;
+      return;
     }
-    // Cargar análisis del paciente
-    if (patient?.id) {
-      analyses = await fetchAnalyses(patient.id);
+
+    try {
+      // 2) Cargar datos del paciente desde el backend
+      await loadPatient(storedUser.id);
+      // 3) Cargar análisis de ese paciente
+      await loadAnalyses(storedUser.id);
+    } catch (err) {
+      console.error("Error en carga inicial del paciente:", err);
+    } finally {
+      loadingPatient = false;
     }
   });
 
-  async function handleSave(event: CustomEvent) {
-    const dataToSave = event.detail;
+  async function loadPatient(patientId: number) {
+    try {
+      const data = await fetchPatient(patientId);
+      patient = data;
+    } catch (err) {
+      console.error("Error al cargar paciente:", err);
+      patient = null;
+    }
+  }
+
+  async function loadAnalyses(patientId: number) {
+    analysesLoading = true;
+    try {
+      analyses = await fetchAnalyses(patientId);
+    } catch (err) {
+      console.error("Error al cargar análisis:", err);
+      analyses = [];
+    } finally {
+      analysesLoading = false;
+    }
+  }
+
+  // =========================================
+  // MANEJO DE PESTAÑAS
+  // =========================================
+  function setTab(tab: typeof activeTab) {
+    activeTab = tab;
+  }
+
+  // =========================================
+  // GUARDAR DATOS DEL PACIENTE
+  // =========================================
+  async function handleSavePatient(updatedData: any) {
     if (!patient?.id) {
       alert("No hay paciente cargado");
       return;
     }
+
     try {
-      const updatedPatient = await updatePatient(patient.id, dataToSave);
-      patient = { ...patient, ...updatedPatient }; // Actualizar datos locales
-      auth.update((current) => ({ ...current, user: patient })); // Actualizar el store
-      alert("Perfil actualizado");
-      activeTab = "profile"; // Volver a la vista de perfil
-    } catch (e) {
-      console.error(e);
-      alert(`Error al actualizar el perfil: ${e.message}`);
+      const saved = await updatePatient(patient.id, updatedData);
+      patient = saved;
+      editMode = false;
+      alert("Datos actualizados correctamente");
+    } catch (err) {
+      console.error("Error al guardar paciente:", err);
+      alert("Error al actualizar los datos del paciente");
     }
   }
 
-  async function handleUpload(event: CustomEvent) {
-    const file = event.detail.file;
-    if (!file) return;
-    loading = true;
-    try {
-      await uploadAnalysis(file);
-      // Recargar la lista de análisis después de subir uno nuevo
-      if (patient?.id) {
-        analyses = await fetchAnalyses(patient.id);
-      }
-      alert("Imagen subida y en proceso de análisis.");
-      activeTab = "results"; // Cambiar a la pestaña de resultados
-    } catch (e) {
-      alert(`Error al subir el archivo: ${e.message}`);
-    } finally {
-      loading = false;
-    }
+  // =========================================
+  // SUBIR IMAGEN PARA ANÁLISIS CON IA
+  // =========================================
+  async function handleAnalyze(file: File) {
+  if (!patient?.id) {
+    alert("No hay paciente cargado");
+    return;
   }
+
+  try {
+    analysesLoading = true;
+
+    // Llamamos al servicio que pega al endpoint /analysis/upload-ia
+    const newAnalysis = await uploadAnalysis(patient.id, file);
+
+    // Agregamos el nuevo análisis al principio de la lista
+    analyses = [newAnalysis, ...analyses];
+
+    // Opcional: cambiamos a la pestaña de análisis
+    activeTab = "analysis";
+  } catch (err) {
+    console.error("Error en handleAnalyze:", err);
+    alert("Error al analizar la imagen");
+  } finally {
+    analysesLoading = false;
+  }
+}
+
+
+  // =========================================
+  // CITAS / APPOINTMENTS (si ya las tienes)
+  // =========================================
+  function handleCreateAppointment(event: CustomEvent) {
+    console.log("Crear cita con datos:", event.detail);
+    // aquí luego puedes llamar a tu API de citas
+  }
+
+    function handleViewDetail(analysis: any) {
+    selectedAnalysis = analysis;
+    // Si quieres, puedes cambiar a la pestaña de análisis:
+    activeTab = "analysis";
+  }
+
 </script>
 
-<div class="container my-5">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="fw-bold text-primary">
-      {#if patient}
-        Bienvenido, {patient.full_name}
-      {:else}
-        Portal del Paciente
-      {/if}
-    </h2>
+<svelte:head>
+  <title>Panel del paciente</title>
+</svelte:head>
+
+{#if loadingPatient}
+  <div class="container py-5">
+    <p>Cargando datos del paciente...</p>
   </div>
+{:else if !patient}
+  <div class="container py-5">
+    <p>No se encontró información del paciente.</p>
+  </div>
+{:else}
+  <div class="container py-4">
+    <h1 class="mb-4">Hola, {patient.full_name} 👋</h1>
 
-  <ul class="nav nav-tabs mb-4">
-    <li class="nav-item">
-      <button
-        class="nav-link {activeTab === 'upload' ? 'active' : ''}"
-        on:click={() => (activeTab = "upload")}
-      >
-        Subir Imagen
-      </button>
-    </li>
-    <li class="nav-item">
-      <button
-        class="nav-link {activeTab === 'results' ? 'active' : ''}"
-        on:click={() => (activeTab = "results")}
-      >
-        Mis Resultados
-      </button>
-    </li>
-    <li class="nav-item">
-      <button
-        class="nav-link {activeTab === 'schedule' ? 'active' : ''}"
-        on:click={() => (activeTab = "schedule")}
-      >
-        Agendar Cita
-      </button>
-    </li>
-    <li class="nav-item">
-      <button
-        class="nav-link {activeTab === 'profile' ? 'active' : ''}"
-        on:click={() => (activeTab = "profile")}
-      >
-        Mi Perfil
-      </button>
-    </li>
-    <li class="nav-item">
-      <button
-        class="nav-link {activeTab === 'actualizar' ? 'active' : ''}"
-        on:click={() => (activeTab = "actualizar")}
-      >
-        Actualizar
-      </button>
-    </li>
-  </ul>
+    <!-- Navegación de pestañas -->
+    <ul class="nav nav-tabs mb-3">
+      <li class="nav-item">
+        <button
+          class={"nav-link " + (activeTab === "profile" ? "active" : "")}
+          on:click={() => setTab("profile")}
+        >
+          Perfil
+        </button>
+      </li>
+      <li class="nav-item">
+        <button
+          class={"nav-link " + (activeTab === "analysis" ? "active" : "")}
+          on:click={() => setTab("analysis")}
+        >
+          Análisis
+        </button>
+      </li>
+      <li class="nav-item">
+        <button
+          class={"nav-link " + (activeTab === "appointments" ? "active" : "")}
+          on:click={() => setTab("appointments")}
+        >
+          Citas
+        </button>
+      </li>
+      <li class="nav-item">
+        <button
+          class={"nav-link " + (activeTab === "actualizar" ? "active" : "")}
+          on:click={() => setTab("actualizar")}
+        >
+          Actualizar datos
+        </button>
+      </li>
+    </ul>
 
-  <div class="tab-content">
-    <div class="tab-pane fade {activeTab === 'upload' ? 'show active' : ''}">
-      <div class="col-lg-8 mx-auto">
-        <AnalysisUpload onAnalyze={handleUpload} />
+    <!-- CONTENIDO DE LAS PESTAÑAS -->
+    <div class="tab-content">
+
+      <!-- PERFIL -->
+      <div class={"tab-pane fade " + (activeTab === "profile" ? "show active" : "")}>
+        <PatientInfoCard {patient} />
+      </div>
+
+      <!-- ANÁLISIS -->
+      <div class="tab-pane" class:active={activeTab === "analysis"}>
+        <div class="row">
+          <div class="col-lg-5 mb-3">
+            <AnalysisUpload onAnalyze={handleAnalyze} />
+          </div>
+          <div class="col-lg-7 mb-3">
+                  <AnalysisList
+                    {analyses}
+                    loading={analysesLoading}
+                    onViewDetail={handleViewDetail}
+                  />
+
+          </div>
+        </div>
+      </div>
+
+      {#if selectedAnalysis}
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="fw-bold mb-0">Detalle del análisis</h4>
+            <button
+              class="btn btn-sm btn-outline-secondary"
+              on:click={() => (selectedAnalysis = null)}
+            >
+              Cerrar
+            </button>
+          </div>
+
+          <p>
+            <strong>Fecha:&nbsp;</strong>
+            {selectedAnalysis.date
+              ? new Date(selectedAnalysis.date).toLocaleString()
+              : "Sin fecha"}
+          </p>
+
+          <p>
+            <strong>Resultado IA:&nbsp;</strong>
+            {selectedAnalysis.result_ia || "En revisión por el médico"}
+          </p>
+
+          <p>
+            <strong>Observación del doctor:&nbsp;</strong>
+            {selectedAnalysis.observation_doctor || "Aún no hay observación registrada."}
+          </p>
+
+          {#if selectedAnalysis.url_image}
+            <div class="mt-3">
+              <p class="fw-semibold mb-2">Imagen analizada:</p>
+              <!-- Construimos la URL absoluta a la imagen -->
+              <img
+                src=${selectedAnalysis.url_image}
+                alt="Imagen del análisis"
+                class="img-fluid rounded border"
+              />
+            </div>
+          {/if}
+        </div>
       </div>
     </div>
+  </div>
+{/if}
 
-    <div class="tab-pane fade {activeTab === 'results' ? 'show active' : ''}">
-      {#if loading}
-        <div class="text-center py-5">
-          <div class="spinner-border text-primary"></div>
-        </div>
-      {:else}
-        <AnalysisList {analyses} />
-      {/if}
-    </div>
 
-    <div class="tab-pane fade {activeTab === 'schedule' ? 'show active' : ''}">
-      <div class="col-lg-8 mx-auto">
-        <AppointmentsForm
-          isPatientView={true}
-          onSuccess={() => {
-            alert(
-              "Cita agendada exitosamente. Podrás ver tus citas próximamente."
-            );
-            activeTab = "profile";
-          }}
+      <!-- CITAS -->
+      <div class={"tab-pane fade " + (activeTab === "appointments" ? "show active" : "")}>
+        <AppointmentsForm on:createAppointment={handleCreateAppointment} />
+      </div>
+
+      <!-- ACTUALIZAR DATOS -->
+      <div class={"tab-pane fade " + (activeTab === "actualizar" ? "show active" : "")}>
+        <PatientInfoForm
+          {patient}
+          on:save={(event) => handleSavePatient(event.detail)}
         />
       </div>
     </div>
-
-    <div class="tab-pane fade {activeTab === 'profile' ? 'show active' : ''}">
-      <div class="col-lg-8 mx-auto">
-        {#if patient}
-          <PatientInfoCard {patient} />
-        {:else if loading}
-          <p class="text-center text-muted">Cargando perfil...</p>
-        {:else}
-          <p class="text-center text-danger">
-            No se pudo cargar el perfil. Intenta recargar la página.
-          </p>
-        {/if}
-      </div>
-    </div>
-
-    <div
-      class="tab-pane fade {activeTab === 'actualizar' ? 'show active' : ''}"
-    >
-      <div class="col-lg-8 mx-auto">
-        {#if patient}
-          <PatientInfoForm {patient} on:save={handleSave} />
-        {:else if loading}
-          <p class="text-center text-muted">Cargando perfil...</p>
-        {/if}
-      </div>
-    </div>
   </div>
-</div>
+{/if}

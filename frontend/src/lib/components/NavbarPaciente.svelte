@@ -1,3 +1,16 @@
+<script>
+  // Props que vienen desde el layout del paciente
+  export let nombre = "Paciente";
+  export let foto = "https://i.pravatar.cc/40";
+
+  // Objeto que reutilizamos en el template
+  $: patient = {
+    nombre,
+    foto
+  };
+</script> 
+
+
 <nav class="navbar navbar-expand-lg navbar-light bg-white shadow">
   <div class="container">
     <a class="navbar-brand text-primary fw-bold" href="/">MediVision</a>
@@ -20,9 +33,9 @@
       <!-- Nombre y foto arriba en móvil -->
       <div class="d-lg-none mt-3 mb-2">
         <div class="d-flex align-items-center">
-          <span class="fw-semibold text-dark me-2">Juan Pérez</span>
+          <span class="fw-semibold text-dark me-2">{patient.nombre}</span>
           <img
-            src="https://i.pravatar.cc/40"
+            src={patient.nombre}
             alt="perfil"
             class="rounded-circle border"
             width="40"
@@ -51,9 +64,9 @@
 
       <!-- Usuario + cerrar sesión (visible solo en escritorio) -->
       <div class="d-none d-lg-flex align-items-center">
-        <span class="me-2 fw-semibold text-dark">Juan Pérez</span>
+        <span class="me-2 fw-semibold text-dark">{patient.nombre}</span>
         <img
-          src="https://i.pravatar.cc/40"
+          src={patient.foto}
           alt="perfil"
           class="rounded-circle border"
           width="40"

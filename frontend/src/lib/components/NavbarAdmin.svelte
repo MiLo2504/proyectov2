@@ -69,7 +69,7 @@
           class="rounded-circle border"
           width="40"
           height="40"
-        />
+        />admin.nombre
         <a href="/login" class="btn btn-primary ms-2">Cerrar sesión</a>
       </div>
     </div>
