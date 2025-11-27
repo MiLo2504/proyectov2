@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import AnalysesTable from "$lib/components/AnalysesTable.svelte";
   import AppointmentsTable from "$lib/components/AppointmentsTable.svelte";
+  
 
   let loading = false;
   let error = "";

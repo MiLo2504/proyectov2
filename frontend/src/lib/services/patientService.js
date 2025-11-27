@@ -114,25 +114,28 @@ function url(path) {
  * Obtiene la lista de análisis de un paciente.
  * Si aún no tienes endpoint GET /analysis, por ahora devolvemos un array vacío.
  */
-  export async function fetchAnalyses(patientId) {
-  // Ojo con el slash final: usa el mismo estilo que en tus otras funciones
-  const res = await fetch(url(`analysis/user/${patientId}`), {
+ export async function fetchAnalyses(patientId) {
+  const API_BASE = "http://127.0.0.1:8000/"; // asegúrate que lleva / al final
+  const url = `${API_BASE}analysis/user/${patientId}`;
+  console.log("fetchAnalyses ->", url);
+
+  const res = await fetch(url, {
     headers: {
       ...getAuthHeaders(),
     },
   });
 
+  const text = await res.text();
+  console.log("fetchAnalyses status:", res.status, "body:", text);
+
   if (!res.ok) {
-    const text = await res.text();
-    console.error("Error al cargar análisis:", text);
     throw new Error("No se pudieron cargar los análisis");
   }
 
-  const data = await res.json();
-
-  // Adaptamos cada item al formato que espera el front
+  const data = JSON.parse(text);
   return data.map(mapAnalysisFromApi);
 }
+
 
 
 /**
@@ -141,18 +144,29 @@ function url(path) {
  */
 
 function mapAnalysisFromApi(apiAnalysis) {
+  const stateId = apiAnalysis.id_state_analysis || apiAnalysis.id_state || 1;
+
+  let statusLabel = "Pendiente de revisión";
+  if (stateId === 2) {
+    statusLabel = "Revisado por el médico";
+  }
+
   return {
     id: apiAnalysis.id_analysis || apiAnalysis.id,
     id_analysis: apiAnalysis.id_analysis,
     id_user: apiAnalysis.id_user,
     date: apiAnalysis.date || apiAnalysis.created_at,
-    status: apiAnalysis.status,
+    // Estado
+    stateId,
+    statusLabel,
+    // Datos médicos
     result_ia: apiAnalysis.result_ia,
-    confidence: apiAnalysis.confidence,
     observation_doctor: apiAnalysis.observation_doctor,
+    confidence: apiAnalysis.confidence,
+    // Ruta de la imagen en el servidor
     url_image: apiAnalysis.url_image,
-    id_state_analysis: apiAnalysis.id_state_analysis || apiAnalysis.id_state,
-    raw: apiAnalysis,
+    raw: apiAnalysis
   };
 }
+
 
